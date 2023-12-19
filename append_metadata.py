@@ -22,6 +22,7 @@ def country_to_continent(country_name):
     return country_continent_name
 
 def get_metadata_per_country(country_path):
+    working_dir = pathlib.Path().absolute()
     metadata_country = []
     for file_path in country_path.glob('*'):
         # Get the width and height of the image
@@ -34,7 +35,7 @@ def get_metadata_per_country(country_path):
             'width': width,
             'height': height,
             'size': file_path.stat().st_size,
-            'path': file_path
+            'path': os.path.relpath(file_path, working_dir)  
         })
     
     return metadata_country
