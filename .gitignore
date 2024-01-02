@@ -162,3 +162,4 @@ cython_debug/
 # Environment LR
 /geoguessr
 /compressed_dataset
+/scaled_images
