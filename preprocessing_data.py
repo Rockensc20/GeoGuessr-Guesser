@@ -6,12 +6,12 @@ import os, shutil, pathlib
 import cv2
 import pandas as pd
 
-HEIGHT = 500
-WIDTH = 500
+HEIGHT = 224
+WIDTH = 224
 IMAGE_FOLDER = "scaled_images"
 CONTINENTS = ["Europe", "Asia"]
 LIMIT_AMOUNT = True
-IMAGE_COUNT = {"Europe":10,"Asia":10 }
+IMAGE_COUNT = {"Europe":5000,"Asia":5000}
 SEED = 42
 
 
@@ -34,14 +34,17 @@ def resize_sample(row: pd.Series) -> str:
 
 def get_filtered_dataframe(df: pd.DataFrame):
     df_result = pd.DataFrame()
-    df_filtered_continent = df[df['continent'].isin(CONTINENTS)]
+    if len(CONTINENTS) > 0: 
+        df_filtered_continent = df[df['continent'].isin(CONTINENTS)]
     
-    if LIMIT_AMOUNT: 
-        for continent in CONTINENTS:
-            df_sample = df_filtered_continent.groupby('continent').get_group(continent).sample(n=IMAGE_COUNT[continent], random_state=SEED)
-            df_result= pd.concat([df_result,df_sample])
+        if LIMIT_AMOUNT: 
+            for continent in CONTINENTS:
+                df_sample = df_filtered_continent.groupby('continent').get_group(continent).sample(n=IMAGE_COUNT[continent], random_state=SEED)
+                df_result= pd.concat([df_result,df_sample])
+        else:
+            df_result=df_filtered_continent
     else:
-        df_result=df_filtered_continent
+        df_result = df
     
     return df_result
 
