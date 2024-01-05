@@ -12,8 +12,8 @@ import numpy as np
 
 img_height = 224
 img_width = 224
-epochs = 1
-
+epochs = 150
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 # test size is set to 5% of the dataset
 #train, test = train_test_split(df_filtered_geo_data, test_size=0.05, random_state=123)
 
