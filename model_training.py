@@ -1,5 +1,6 @@
 import tensorflow as tf
 import pandas as pd
+import datetime
 from tensorflow.keras.applications.densenet import DenseNet121
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
@@ -9,43 +10,58 @@ from sklearn.model_selection import train_test_split
 import plotly.graph_objects as go
 import numpy as np
 
-img_height = 225
-img_width = 225
-epochs = 5
-
+img_height = 224
+img_width = 224
+epochs = 150
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 # test size is set to 5% of the dataset
 #train, test = train_test_split(df_filtered_geo_data, test_size=0.05, random_state=123)
 
 # Create training and test datasets using image_dataset_from_directory
-train_df, test_df = tf.keras.utils.image_dataset_from_directory(
+loaded_data = tf.keras.utils.image_dataset_from_directory(
     "scaled_images",
+    labels = "inferred",
+    label_mode = "int",
+    color_mode = "rgb",
+    batch_size=32,
     image_size=(img_height, img_width),
-    batch_size=2,
-    validation_split=0.2,
-    seed=123,
-    subset="both",
-    smart_resize=True
+    shuffle = True,
+    seed=42
 )
 
+# scale data for all values to be between 0 and 1 in order for better performance
+scaled_data = loaded_data.map(lambda x,y: (x/255, y))
+
+# partion data for training, validation and a heldback dataset
+dataset_length = len(scaled_data)
+train_size = int(dataset_length*0.7)
+val_size = int(dataset_length*0.2)
+test_size = int(dataset_length*0.1)
+
+train_ds = scaled_data.take(train_size)
+val_ds = scaled_data.skip(train_size).take(val_size)
+test_ds = scaled_data.skip(train_size+train_size).take(test_size)
+
 # number of classes = 2 - two continents
-num_classes = len(train_df.class_names)
+num_classes = len(loaded_data.class_names)
 
 # Use TensorFlow's AUTOTUNE to automatically adjust the number of parallel calls during data preprocessing
 AUTOTUNE = tf.data.AUTOTUNE
 
 # Cache, shuffle, and prefetch the training dataset for optimized performance
-train_ds = train_df.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
-test_ds = test_df.cache().prefetch(buffer_size=AUTOTUNE)
+train_ds_cache = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
+val_ds_cache = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
 dense_net = DenseNet121(
     input_shape=(img_height, img_width, 3),
-    include_top=False,
-    weights="imagenet"
+    include_top=True,
+    weights="imagenet",
+    classifier_activation="softmax"
 )
 
 dense_model = Sequential()
 dense_model.add(dense_net)
-dense_model.add(GlobalAveragePooling2D())
+#dense_model.add(GlobalAveragePooling2D())
 dense_model.add(Dense(num_classes, activation="softmax"))
 dense_model.summary()
 
@@ -56,12 +72,23 @@ dense_model.compile(
 )
 
 dense_history = dense_model.fit(
-    train_ds,
+    train_ds_cache,
     epochs=epochs,
-    validation_data=train_ds
+    validation_data=val_ds_cache
 )
 
-# plots
+
+# serialize model to JSON
+dense_model_json = dense_model.to_json()
+timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+model_name = "dense-" + timestr
+with open(model_name, "w") as json_file:
+    json_file.write(dense_model_json + ".json")
+# serialize weights to HDF5
+dense_model.save_weights(model_name+ ".h5")
+print("Saved model to disk")
+
+""" # plots
 from plotly.subplots import make_subplots
 
 epochs_range = [x for x in range(epochs)]
@@ -113,10 +140,10 @@ fig.update_layout(height=800, width=1000)
 fig.show()
 
 # get the true labels
-true_labels = tf.concat([y for x, y in test_df], axis=0)
+true_labels = tf.concat([y for x, y in test_ds], axis=0)
 
 # Generate predictions
-predictions = dense_model.predict(test_df)
+predictions = dense_model.predict(test_ds)
 
 # get the predicted labels
 predicted_labels = tf.argmax(predictions, axis=1)
@@ -127,14 +154,14 @@ model_accuracy = np.mean(predicted_labels.numpy() == true_labels.numpy())
 confusion_matrix = tf.math.confusion_matrix(
     labels=true_labels,
     predictions=predicted_labels,
-    num_classes=len(test_df.class_names)
+    num_classes=len(test_ds.class_names)
 )
 
 # Normalize confusion matrix to percentage
 cm_percentage = confusion_matrix / tf.math.reduce_sum(confusion_matrix, axis=1, keepdims=True) * 100
 
 # Create a dataframe for the heatmap
-heatmap_df = pd.DataFrame(cm_percentage, columns=test_df.class_names, index=test_df.class_names)
+heatmap_df = pd.DataFrame(cm_percentage, columns=test_ds.class_names, index=test_ds.class_names)
 
 # Create the heatmap using Plotly Express imshow
 fig = go.Figure()
@@ -152,4 +179,4 @@ fig.update_xaxes(title_text='Predicted')
 fig.update_yaxes(title_text='True')
 
 fig.update_layout(coloraxis=dict(colorscale='Blues'), title_text='{} : {:.2f}%'.format('Dense Net 121', model_accuracy * 100))
-fig.show()
+fig.show() """
