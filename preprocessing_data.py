@@ -11,7 +11,7 @@ WIDTH = 224
 IMAGE_FOLDER = "scaled_images"
 CONTINENTS = ["Europe", "Asia"]
 LIMIT_AMOUNT = True
-IMAGE_COUNT = {"Europe":5000,"Asia":5000}
+IMAGE_COUNT = {"Europe":8000,"Asia":8000}
 SEED = 42
 
 
