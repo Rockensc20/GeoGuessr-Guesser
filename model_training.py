@@ -4,15 +4,15 @@ import datetime
 from tensorflow.keras.applications.densenet import DenseNet121
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.optimizers import Adam
 from keras.models import Sequential, Model
 from keras.layers import Dense, Flatten, Dropout, RandomFlip, RandomRotation, RandomZoom, GlobalAveragePooling2D
 from sklearn.model_selection import train_test_split
-import plotly.graph_objects as go
 import numpy as np
 
 img_height = 224
 img_width = 224
-epochs = 150
+epochs = 75
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 # test size is set to 5% of the dataset
 #train, test = train_test_split(df_filtered_geo_data, test_size=0.05, random_state=123)
@@ -52,6 +52,8 @@ AUTOTUNE = tf.data.AUTOTUNE
 train_ds_cache = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
 val_ds_cache = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
+
+# des net model
 dense_net = DenseNet121(
     input_shape=(img_height, img_width, 3),
     include_top=True,
@@ -77,7 +79,6 @@ dense_history = dense_model.fit(
     validation_data=val_ds_cache
 )
 
-
 # serialize model to JSON
 dense_model_json = dense_model.to_json()
 timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -87,6 +88,54 @@ with open(model_name, "w") as json_file:
 # serialize weights to HDF5
 dense_model.save_weights(model_name+ ".h5")
 print("Saved model to disk")
+
+
+# res_net model
+res_net= tf.keras.applications.ResNet50(
+    include_top=False,
+    input_shape=(img_height,img_width,3),
+    pooling='avg',
+    classes=2,
+    weights='imagenet')
+
+for layer in res_net.layers:
+    layer.trainable=False
+
+resnet_model = Sequential()
+resnet_model.add(res_net)
+resnet_model.add(Flatten())
+resnet_model.add(Dense(512, activation='relu'))
+resnet_model.add(Dense(2, activation='softmax'))
+
+resnet_model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+resnet_model.compile(
+    optimizer=Adam(lr=0.001),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy'])
+
+resnet_history = resnet_model.fit(
+    train_ds_cache,
+    validation_data=val_ds_cache,
+    epochs=epochs
+)
+
+# serialize model to JSON
+resnet_model_json = resnet_model.to_json()
+timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+model_name = "resnet-" + timestr
+
+with open(model_name, "w") as json_file:
+    json_file.write(resnet_model_json + ".json")
+# serialize weights to HDF5
+resnet_model.save_weights(model_name+ ".h5")
+
+print("Saved model to disk")
+
 
 """ # plots
 from plotly.subplots import make_subplots
