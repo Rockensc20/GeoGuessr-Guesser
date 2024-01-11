@@ -6,14 +6,28 @@ import os, shutil, pathlib
 import cv2
 import pandas as pd
 
-HEIGHT = 224
-WIDTH = 224
+CROP_HEIGHT = 600
+CROP_WIDTH = 600
+CENTER_CROP = True
+SCALE_HEIGHT = 224
+SCALE_WIDTH = 224
 IMAGE_FOLDER = "scaled_images"
 CONTINENTS = ["Europe", "Asia"]
 LIMIT_AMOUNT = True
 IMAGE_COUNT = {"Europe":8000,"Asia":8000}
 SEED = 42
 
+# center crops images to maximum possible height and width within the specified values
+def center_crop(img, dim):
+	width, height = img.shape[1], img.shape[0]
+
+	# process crop width and height for max available dimension
+	crop_width = dim[0] if dim[0]<img.shape[1] else img.shape[1]
+	crop_height = dim[1] if dim[1]<img.shape[0] else img.shape[0] 
+	mid_x, mid_y = int(width/2), int(height/2)
+	cw2, ch2 = int(crop_width/2), int(crop_height/2) 
+	crop_img = img[mid_y-ch2:mid_y+ch2, mid_x-cw2:mid_x+cw2]
+	return crop_img
 
 # resizes images to Height and Width dimensions
 def resize_sample(row: pd.Series) -> str:
@@ -22,7 +36,9 @@ def resize_sample(row: pd.Series) -> str:
     image_name = row["image_name"]
 
     image = cv2.imread(image_path)
-    scaled_image = cv2.resize(image, (WIDTH, HEIGHT))
+    if CENTER_CROP:
+        image = center_crop(image, (600,600))
+    scaled_image = cv2.resize(image, (SCALE_WIDTH, SCALE_HEIGHT))
 
     path = f'{IMAGE_FOLDER}/{continent}'
     if not os.path.exists(path):
