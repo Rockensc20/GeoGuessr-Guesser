@@ -93,22 +93,23 @@ print("Saved DenseNet model to disk")'''
 # res_net model
 
 # ResNet50
-res_net = tf.keras.applications.ResNet50(
-    include_top=True
+#res_net = tf.keras.applications.ResNet50(
+#    include_top=False,
+#    input_shape=(img_height, img_width, 3),
+#    pooling='avg',
+#    classes=2,
+#    weights='imagenet'
+#)
+
+# ResNet101V2
+res_net = tf.keras.applications.ResNet101V2(
+include_top=True,
     weights="imagenet",
     input_tensor = None,
     input_shape= None,
     pooling=None,
     classes=2,
     classifier_activation = "softmax"
-)
-
-res_net = tf.keras.applications.ResNet101V2(
-    include_top=False,
-    input_shape=(img_height,img_width,3),
-    pooling='avg',
-    classes=2,
-    weights='imagenet'
 )
 
 for layer in res_net.layers:
