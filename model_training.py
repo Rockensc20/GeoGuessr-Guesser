@@ -53,8 +53,8 @@ train_ds_cache = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
 val_ds_cache = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
 
-# des net model
-dense_net = DenseNet121(
+# dens net model
+'''dense_net = DenseNet121(
     input_shape=(img_height, img_width, 3),
     include_top=True,
     weights="imagenet",
@@ -87,16 +87,29 @@ with open(model_name, "w") as json_file:
     json_file.write(dense_model_json + ".json")
 # serialize weights to HDF5
 dense_model.save_weights(model_name+ ".h5")
-print("Saved model to disk")
+print("Saved DenseNet model to disk")'''
 
 
 # res_net model
-res_net= tf.keras.applications.ResNet50(
+
+# ResNet50
+res_net = tf.keras.applications.ResNet50(
+    include_top=True
+    weights="imagenet",
+    input_tensor = None,
+    input_shape= None,
+    pooling=None,
+    classes=2,
+    classifier_activation = "softmax"
+)
+
+res_net = tf.keras.applications.ResNet101V2(
     include_top=False,
     input_shape=(img_height,img_width,3),
     pooling='avg',
     classes=2,
-    weights='imagenet')
+    weights='imagenet'
+)
 
 for layer in res_net.layers:
     layer.trainable=False
@@ -134,7 +147,7 @@ with open(model_name, "w") as json_file:
 # serialize weights to HDF5
 resnet_model.save_weights(model_name+ ".h5")
 
-print("Saved model to disk")
+print("Saved Resnet model to disk")
 
 
 """ # plots
