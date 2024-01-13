@@ -1,3 +1,4 @@
+import keras
 import tensorflow as tf
 import pandas as pd
 import datetime
@@ -5,14 +6,97 @@ from tensorflow.keras.applications.densenet import DenseNet121
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.optimizers import Adam
+from enum import Enum
 from keras.models import Sequential, Model
 from keras.layers import Dense, Flatten, Dropout, RandomFlip, RandomRotation, RandomZoom, GlobalAveragePooling2D
 from sklearn.model_selection import train_test_split
 import numpy as np
 
+class ModelType(Enum):
+    ResNet50 = 1
+    DenseNet121 = 2
+    ResNet101V2 = 3
+
+def trainDenseNet121(img_height, img_width, num_classes):
+    dense_net = DenseNet121(
+        input_shape=(img_height, img_width, 3),
+        include_top=True,
+        weights="imagenet",
+        classifier_activation="softmax"
+    )
+
+    dense_model = Sequential()
+    dense_model.add(dense_net)
+    # dense_model.add(GlobalAveragePooling2D())
+    dense_model.add(Dense(num_classes, activation="softmax"))
+    dense_model.summary()
+
+    dense_model.compile(
+        optimizer="adam",
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    return dense_model.fit(
+        train_ds_cache,
+        epochs=epochs,
+        validation_data=val_ds_cache
+    )
+
+
+def trainResNet50(img_height, img_width, num_classes):
+    res_net = tf.keras.applications.ResNet50(
+        include_top=False,
+        input_shape=(img_height, img_width, 3),
+        pooling='avg',
+        classes=num_classes,
+        weights='imagenet'
+    )
+
+    return fitResNet(res_net)
+
+def trainNet101V2(img_height, img_width, num_classes):
+    res_net = tf.keras.applications.ResNet101V2(
+        include_top=True,
+        weights="imagenet",
+        input_tensor=None,
+        input_shape=(img_height, img_width, 3),
+        pooling='avg',
+        classes=num_classes,
+        classifier_activation="softmax"
+    )
+    return fitResNet(res_net)
+
+def fitResNet(model: keras.Model):
+    for layer in model.layers:
+        layer.trainable = False
+
+    resnet_model = Sequential()
+    resnet_model.add(model)
+    resnet_model.add(Flatten())
+    resnet_model.add(Dense(512, activation='relu'))
+    resnet_model.add(Dense(2, activation='softmax'))
+
+    resnet_model.compile(
+        optimizer=Adam(lr=0.001),
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy'])
+
+    return resnet_model.fit(
+        train_ds_cache,
+        validation_data=val_ds_cache,
+        epochs=epochs
+    )
+
+
+
+# ---- MAIN ----
+
 img_height = 224
 img_width = 224
-epochs = 75
+epochs = 30
+model = ModelType.ResNet101V2
+
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 # test size is set to 5% of the dataset
 #train, test = train_test_split(df_filtered_geo_data, test_size=0.05, random_state=123)
@@ -30,7 +114,10 @@ loaded_data = tf.keras.utils.image_dataset_from_directory(
 )
 
 # scale data for all values to be between 0 and 1 in order for better performance
-scaled_data = loaded_data.map(lambda x,y: (x/255, y))
+if model == ModelType.ResNet101V2:
+    scaled_data = keras.applications.resnet_v2.preprocess_input(x = loaded_data)
+else:
+    scaled_data = loaded_data.map(lambda x,y: (x/255, y))
 
 # partion data for training, validation and a heldback dataset
 dataset_length = len(scaled_data)
@@ -52,105 +139,26 @@ AUTOTUNE = tf.data.AUTOTUNE
 train_ds_cache = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
 val_ds_cache = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
-
-# dens net model
-'''dense_net = DenseNet121(
-    input_shape=(img_height, img_width, 3),
-    include_top=True,
-    weights="imagenet",
-    classifier_activation="softmax"
-)
-
-dense_model = Sequential()
-dense_model.add(dense_net)
-#dense_model.add(GlobalAveragePooling2D())
-dense_model.add(Dense(num_classes, activation="softmax"))
-dense_model.summary()
-
-dense_model.compile(
-    optimizer="adam",
-    loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"]
-)
-
-dense_history = dense_model.fit(
-    train_ds_cache,
-    epochs=epochs,
-    validation_data=val_ds_cache
-)
+# fit model
+if model == ModelType.ResNet101V2:
+    model = trainNet101V2(img_height=img_height, img_width=img_width, num_classes=num_classes)
+elif model == ModelType.ResNet50:
+    model = trainResNet50(img_height=img_height, img_width=img_width, num_classes=num_classes)
+elif model == ModelType.DenseNet121:
+    model = trainDenseNet121(img_height=img_height, img_width=img_width, num_classes=num_classes)
 
 # serialize model to JSON
-dense_model_json = dense_model.to_json()
+dense_model_json = model.to_json()
 timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-model_name = "dense-" + timestr
+model_name = ModelType.name + timestr
 with open(model_name, "w") as json_file:
     json_file.write(dense_model_json + ".json")
+
 # serialize weights to HDF5
-dense_model.save_weights(model_name+ ".h5")
-print("Saved DenseNet model to disk")'''
+model.save_weights(model_name+ ".h5")
+print("Saved Model model to disk")
 
-
-# res_net model
-
-# ResNet50
-#res_net = tf.keras.applications.ResNet50(
-#    include_top=False,
-#    input_shape=(img_height, img_width, 3),
-#    pooling='avg',
-#    classes=2,
-#    weights='imagenet'
-#)
-
-# ResNet101V2
-res_net = tf.keras.applications.ResNet101V2(
-include_top=True,
-    weights="imagenet",
-    input_tensor = None,
-    input_shape= None,
-    pooling=None,
-    classes=2,
-    classifier_activation = "softmax"
-)
-
-for layer in res_net.layers:
-    layer.trainable=False
-
-resnet_model = Sequential()
-resnet_model.add(res_net)
-resnet_model.add(Flatten())
-resnet_model.add(Dense(512, activation='relu'))
-resnet_model.add(Dense(2, activation='softmax'))
-
-resnet_model.compile(
-    optimizer="adam",
-    loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"]
-)
-
-resnet_model.compile(
-    optimizer=Adam(lr=0.001),
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy'])
-
-resnet_history = resnet_model.fit(
-    train_ds_cache,
-    validation_data=val_ds_cache,
-    epochs=epochs
-)
-
-# serialize model to JSON
-resnet_model_json = resnet_model.to_json()
-timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-model_name = "resnet-" + timestr
-
-with open(model_name, "w") as json_file:
-    json_file.write(resnet_model_json + ".json")
-# serialize weights to HDF5
-resnet_model.save_weights(model_name+ ".h5")
-
-print("Saved Resnet model to disk")
-
-
+# ---- Plots ----
 """ # plots
 from plotly.subplots import make_subplots
 
