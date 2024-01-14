@@ -15,7 +15,7 @@ from tensorflow.keras.applications.densenet import DenseNet121, preprocess_input
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
 
-model_weights = 'models/dense2_model_best_adam.hdf5'
+model_weights = 'models/dense_categorical_model_best_adam.hdf5'
 model_name = 'DenseNet121'
 
 def load_dense_model():
@@ -65,6 +65,53 @@ def load_dense_model():
 
     return transfer_model
 
+def make_predictions(test_ds):
+    true_labels = np.concatenate(list(test_ds.map(lambda x, y: y).as_numpy_iterator()))
+    true_labels_int = true_labels
+
+    # Get model predictions
+    predictions = dense_model.predict(test_ds)
+    print(predictions)
+
+    # Convert predictions to binary (0 or 1) based on a threshold
+    predictions_binary = (predictions[:, 1] > 0.5).astype(np.int32)
+
+    # Compute confusion matrix
+    confusion_matrix = tf.math.confusion_matrix(labels=true_labels_int, predictions=predictions_binary, num_classes=2)
+
+    # Normalize confusion matrix to percentage
+    cm_percentage = confusion_matrix / tf.math.reduce_sum(confusion_matrix, axis=1, keepdims=True) * 100
+
+    # Convert numerical labels to string labels for the heatmap
+    label_mapping = {0: 'Asia', 1: 'Europe'}
+    true_labels_str = [label_mapping[label] for label in true_labels_int]
+
+    model_accuracy = np.mean(predictions_binary == true_labels_int)
+
+    return cm_percentage.numpy(), model_accuracy
+
+def print_heatmap(cm_percentage, model_accuracy):
+    class_names = ['Asia', 'Europe']
+    heatmap_df = pd.DataFrame(cm_percentage, index=class_names, columns=class_names)
+
+    # Create the heatmap using Plotly Express imshow
+    fig = go.Figure()
+    fig.add_trace(
+        go.Heatmap(
+            z=heatmap_df.values,
+            x=heatmap_df.columns,
+            y=heatmap_df.index,
+            coloraxis='coloraxis',
+            zmax=100,
+            zmin=0
+        )
+    )
+    fig.update_xaxes(title_text='Predicted')
+    fig.update_yaxes(title_text='True')
+
+    fig.update_layout(coloraxis=dict(colorscale='Blues'), title_text='{} : {:.2f}%'.format(model_name, model_accuracy * 100))
+    fig.show()
+
 def load_data():
     # Define the directory containing the subfolders
     data_directory = "scaled_images_splitted"
@@ -89,58 +136,23 @@ def load_data():
 
     return test_data
 
-# Load data
-test_ds = load_data()
 
-true_labels = np.concatenate(list(test_ds.map(lambda x, y: y).as_numpy_iterator()))
-true_labels_int = true_labels
+if __name__ == '__main__':
+    # load data
+    test_ds = load_data()
 
-# Load model
-adam = tf.keras.optimizers.Adam(learning_rate=0.0001)
-dense_model = load_dense_model()
-dense_model = tf.keras.models.load_model(model_weights, compile=False)
-dense_model.compile(
-    optimizer = adam,
-    loss =  tf.compat.v1.losses.sparse_softmax_cross_entropy,
-    metrics=["accuracy"]
-)
-
-# Get model predictions
-predictions = dense_model.predict(test_ds)
-print(predictions)
-
-# Convert predictions to binary (0 or 1) based on a threshold
-predictions_binary = (predictions[:, 1] > 0.5).astype(np.int32)
-
-# Compute confusion matrix
-confusion_matrix = tf.math.confusion_matrix(labels=true_labels_int, predictions=predictions_binary, num_classes=2)
-
-# Normalize confusion matrix to percentage
-cm_percentage = confusion_matrix / tf.math.reduce_sum(confusion_matrix, axis=1, keepdims=True) * 100
-
-# Convert numerical labels to string labels for the heatmap
-label_mapping = {0: 'Asia', 1: 'Europe'}
-true_labels_str = [label_mapping[label] for label in true_labels_int]
-
-model_accuracy = np.mean(predictions_binary == true_labels_int)
-
-class_names = ['Asia', 'Europe']
-heatmap_df = pd.DataFrame(cm_percentage.numpy(), index=class_names, columns=class_names)
-
-# Create the heatmap using Plotly Express imshow
-fig = go.Figure()
-fig.add_trace(
-    go.Heatmap(
-        z=heatmap_df.values,
-        x=heatmap_df.columns,
-        y=heatmap_df.index,
-        coloraxis='coloraxis',
-        zmax=100,
-        zmin=0
+    # load model
+    adam = tf.keras.optimizers.Adam(learning_rate=0.0001)
+    dense_model = load_dense_model()
+    dense_model = tf.keras.models.load_model(model_weights, compile=False)
+    dense_model.compile(
+        optimizer = adam,
+        loss =  tf.compat.v1.losses.sparse_softmax_cross_entropy,
+        metrics=["accuracy"]
     )
-)
-fig.update_xaxes(title_text='Predicted')
-fig.update_yaxes(title_text='True')
 
-fig.update_layout(coloraxis=dict(colorscale='Blues'), title_text='{} : {:.2f}%'.format(model_name, model_accuracy * 100))
-fig.show()
+    # make prediction and get confusion matrix
+    cm_percentage, model_accuracy = make_predictions(test_ds)
+
+    # print confusion matrix
+    print_heatmap(cm_percentage, model_accuracy)
