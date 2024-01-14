@@ -50,15 +50,8 @@ def load_data():
 # load data
 train_ds, test_ds, test_ds_labels = load_data()
 
-y_values = []
-
-for x, y in test_ds:
-    arr = y.numpy().flatten()
-    for i in arr:
-        if i == 0:
-            y_values.append('Asia')
-        else:
-            y_values.append('Europe')
+true_labels = np.concatenate(list(test_ds_labels.map(lambda x, y: y).as_numpy_iterator()))
+print(true_labels)
 
 iter = 0
 model_name = 'DenseNet121'
@@ -70,14 +63,29 @@ loaded_model = tf.keras.models.model_from_json(loaded_model_json)
 loaded_model.load_weights('dense_weights.h5')
 dense_model = loaded_model
 
+true_labels = np.concatenate(list(test_ds.map(lambda x, y: y).as_numpy_iterator()))
+true_labels_int = true_labels
+
+# Get model predictions
 predictions = dense_model.predict(test_ds)
-confusion_matrix = tf.math.confusion_matrix(labels=predictions, predictions=predictions)
+
+# Convert predictions to binary (0 or 1) based on a threshold
+predictions_binary = (predictions[:, 1] > 0.5).astype(np.int32)
+
+# Compute confusion matrix
+confusion_matrix = tf.math.confusion_matrix(labels=true_labels_int, predictions=predictions_binary, num_classes=2)
 
 # Normalize confusion matrix to percentage
 cm_percentage = confusion_matrix / tf.math.reduce_sum(confusion_matrix, axis=1, keepdims=True) * 100
 
-# Create a dataframe for the heatmap
-heatmap_df = pd.DataFrame(cm_percentage, columns=y_values, index=y_values)
+# Convert numerical labels to string labels for the heatmap
+label_mapping = {0: 'Asia', 1: 'Europe'}
+true_labels_str = [label_mapping[label] for label in true_labels_int]
+
+model_accuracy = np.mean(predictions_binary == true_labels_int)
+
+class_names = ['Asia', 'Europe']
+heatmap_df = pd.DataFrame(cm_percentage.numpy(), index=class_names, columns=class_names)
 
 # Create the heatmap using Plotly Express imshow
 fig = go.Figure()
@@ -95,4 +103,4 @@ fig.update_xaxes(title_text='Predicted')
 fig.update_yaxes(title_text='True')
 
 fig.update_layout(coloraxis=dict(colorscale='Blues'), title_text='{} : {:.2f}%'.format('Dense Net 121', model_accuracy * 100))
-fig.show() 
+fig.show()
