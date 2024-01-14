@@ -5,10 +5,11 @@ import os, shutil, pathlib
 # External
 import cv2
 import pandas as pd
+import splitfolders
 
 CROP_HEIGHT = 600
 CROP_WIDTH = 600
-CENTER_CROP = True
+CENTER_CROP = False
 SCALE_HEIGHT = 224
 SCALE_WIDTH = 224
 IMAGE_FOLDER = "scaled_images"
@@ -16,6 +17,7 @@ CONTINENTS = ["Europe", "Asia"]
 LIMIT_AMOUNT = True
 IMAGE_COUNT = {"Europe":8000,"Asia":8000}
 SEED = 42
+ONLY_SPLIT =True
 
 # center crops images to maximum possible height and width within the specified values
 def center_crop(img, dim):
@@ -65,18 +67,21 @@ def get_filtered_dataframe(df: pd.DataFrame):
     return df_result
 
 def main():
+    if not ONLY_SPLIT:
+        # delete scaled_images folder
+        if os.path.exists(IMAGE_FOLDER):
+            shutil.rmtree(IMAGE_FOLDER)
+        os.mkdir(IMAGE_FOLDER)
 
-    # delete scaled_images folder
-    if os.path.exists(IMAGE_FOLDER):
-        shutil.rmtree(IMAGE_FOLDER)
-    os.mkdir(IMAGE_FOLDER)
-
-    df_metadata = pd.read_csv('country_data.csv')  # import metadata from append_metadata.py, includes all countries and continents
-    df_filtered_continent = get_filtered_dataframe(df_metadata)
-    #df_metadata = df_metadata.iloc[:10, :] # for testing
-    df_resized = df_filtered_continent
-    df_resized["path"] = df_filtered_continent.apply(lambda sample: resize_sample(sample), axis=1)
-    df_resized.to_csv("preprocessing_resized.csv", index=False)
+        df_metadata = pd.read_csv('country_data.csv')  # import metadata from append_metadata.py, includes all countries and continents
+        df_filtered_continent = get_filtered_dataframe(df_metadata)
+        #df_metadata = df_metadata.iloc[:10, :] # for testing
+        df_resized = df_filtered_continent
+        df_resized["path"] = df_filtered_continent.apply(lambda sample: resize_sample(sample), axis=1)
+        df_resized.to_csv("preprocessing_resized.csv", index=False)
+        
+    else:
+        splitfolders.ratio("scaled_images",seed=42, output="scaled_images_splitted", ratio=(0.7, 0.2, 0.1))
 
 if __name__ == "__main__":
     main()
