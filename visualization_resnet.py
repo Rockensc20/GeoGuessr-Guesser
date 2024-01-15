@@ -1,7 +1,6 @@
 import tensorflow as tf
 import pandas as pd
 import datetime
-from tensorflow.keras.applications.densenet import DenseNet121
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.models import Sequential, Model
@@ -10,40 +9,38 @@ from sklearn.model_selection import train_test_split
 import plotly.graph_objects as go
 import numpy as np
 from plotly.subplots import make_subplots
-from tensorflow.keras.applications.densenet import DenseNet121, preprocess_input
+from keras.applications.resnet_v2 import ResNet50V2
+from keras.applications.resnet_v2 import preprocess_input
     
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
 
-model_weights = 'models/dense_sebi.hdf5'
-model_name = 'DenseNet121'
+model_weights = 'models/resnet.hdf5'
+model_name = 'ResNet50'
 
-def load_dense_model():
-    densenet_model = DenseNet121(
+def load_resnet_model():
+    resnet50v2_model = ResNet50V2(
         include_top=False,
-        weights="imagenet",
-        classifier_activation="softmax",
+        weights='imagenet',
+        pooling='avg',
         input_shape=(IMG_HEIGHT, IMG_WIDTH,3)
     )
 
     # Freeze the layers in the pretrained model as we do not want to train them anymore
-    for layer in densenet_model.layers[:149]:
+    for layer in resnet50v2_model.layers:
         layer.trainable = False
-    for layer in densenet_model.layers[149:]:
-        layer.trainable = True
 
     # Create our transfer model that will use the pretrained resnet as input
     transfer_model = Sequential()
-    transfer_model.add(densenet_model)
-    transfer_model.add(GlobalAveragePooling2D())
+    transfer_model.add(resnet50v2_model)
+    transfer_model.add(Flatten())
     transfer_model.add(Dense(512, activation='relu'))
-    transfer_model.add(Dropout(0.7))
     transfer_model.add(BatchNormalization())
     transfer_model.add(Dense(256, activation='relu'))
-    transfer_model.add(Dropout(0.5))
     transfer_model.add(BatchNormalization())
-    transfer_model.add(Dense(128, activation='relu'))
     transfer_model.add(Dropout(0.5))
+    transfer_model.add(Dense(128, activation='relu'))
+    transfer_model.add(Dropout(0.3))
     transfer_model.add(BatchNormalization())
     transfer_model.add(Dense(64, activation='relu'))
     transfer_model.add(Dropout(0.3))
@@ -52,25 +49,23 @@ def load_dense_model():
     transfer_model.summary()
 
     # Instantiate our desired optimzer, could be grid searched do find a more optimal configuration
-    adam = tf.keras.optimizers.Adam(learning_rate=0.0001)
+    adam = tf.keras.optimizers.Adam(lr=0.0001)
 
     # Compile model to use for training
     transfer_model.compile(
-        optimizer = adam,
-        loss =  tf.compat.v1.losses.sparse_softmax_cross_entropy,
+        optimizer = tf.keras.optimizers.SGD(lr = 0.0001, momentum = 0.9, nesterov = True),
+        loss = 'categorical_crossentropy',
         metrics=["accuracy"]
     )
 
-    #transfer_model.load_weights(model_weights)
-
     return transfer_model
 
-def make_predictions(dense_model, test_ds):
+def make_predictions(resnet_model, test_ds):
     true_labels = np.concatenate(list(test_ds.map(lambda x, y: y).as_numpy_iterator()))
     true_labels_int = true_labels
 
     # Get model predictions
-    predictions = dense_model.predict(test_ds)
+    predictions = resnet_model.predict(test_ds)
     print(predictions)
 
     # Convert predictions to binary (0 or 1) based on a threshold
@@ -142,17 +137,16 @@ if __name__ == '__main__':
     test_ds = load_data()
 
     # load model
-    adam = tf.keras.optimizers.Adam(learning_rate=0.0001)
-    dense_model = load_dense_model()
-    dense_model = tf.keras.models.load_model(model_weights, compile=False)
-    dense_model.compile(
-        optimizer = adam,
-        loss =  tf.compat.v1.losses.sparse_softmax_cross_entropy,
+    resnet_model = load_resnet_model()
+    resnet_model = tf.keras.models.load_model(model_weights, compile=False)
+    resnet_model.compile(
+        optimizer = tf.keras.optimizers.SGD(lr = 0.0001, momentum = 0.9, nesterov = True),
+        loss = 'categorical_crossentropy',
         metrics=["accuracy"]
     )
 
     # make prediction and get confusion matrix
-    cm_percentage, model_accuracy = make_predictions(dense_model, test_ds)
+    cm_percentage, model_accuracy = make_predictions(resnet_model, test_ds)
 
     # print confusion matrix
     print_heatmap(cm_percentage, model_accuracy)
