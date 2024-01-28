@@ -17,7 +17,7 @@ CONTINENTS = ["Europe", "Asia"]
 LIMIT_AMOUNT = True
 IMAGE_COUNT = {"Europe":8000,"Asia":8000}
 SEED = 42
-ONLY_SPLIT =True
+ONLY_SPLIT =True # File needs to be run twice, once with and once without only_split active
 
 # center crops images to maximum possible height and width within the specified values
 def center_crop(img, dim):
@@ -31,7 +31,7 @@ def center_crop(img, dim):
 	crop_img = img[mid_y-ch2:mid_y+ch2, mid_x-cw2:mid_x+cw2]
 	return crop_img
 
-# resizes images to Height and Width dimensions
+# resizes images to height and width dimensions with an optional center crop
 def resize_sample(row: pd.Series) -> str:
     continent = row["continent"]
     image_path = row["path"]
@@ -39,8 +39,8 @@ def resize_sample(row: pd.Series) -> str:
 
     image = cv2.imread(image_path)
     if CENTER_CROP:
-        image = center_crop(image, (600,600))
-    scaled_image = cv2.resize(image, (SCALE_WIDTH, SCALE_HEIGHT))
+        image = center_crop(image, (CROP_HEIGHT,CROP_WIDTH))
+    scaled_image = cv2.resize(image, (SCALE_HEIGHT, SCALE_WIDTH))
 
     path = f'{IMAGE_FOLDER}/{continent}'
     if not os.path.exists(path):
