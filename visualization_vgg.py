@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
 
-model_weights = 'models/vgg_lukas.hdf5'
+model_weights = 'models/vgg_cropped.hdf5'
 model_name = 'VGG16'
 
 def load_vgg_model():
@@ -85,9 +85,9 @@ def make_predictions(vgg_model, test_ds):
 
     model_accuracy = np.mean(predictions_binary == true_labels_int)
 
-    auc = roc_auc_score(true_labels_int, predictions_binary)
+    auc = roc_auc_score(true_labels_int, predictions[:, 1])
     
-    fpr, tpr, _ = roc_curve(true_labels_int, predictions_binary)
+    fpr, tpr, _ = roc_curve(true_labels_int, predictions[:, 1])
 
     plt.plot(fpr, tpr, label=f'AUC: {auc:.2f}')
     plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random')

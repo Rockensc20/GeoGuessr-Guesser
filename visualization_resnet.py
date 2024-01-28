@@ -9,41 +9,44 @@ from sklearn.model_selection import train_test_split
 import plotly.graph_objects as go
 import numpy as np
 from plotly.subplots import make_subplots
-from keras.applications.resnet_v2 import ResNet50V2
-from keras.applications.resnet_v2 import preprocess_input
+from keras.applications.resnet import ResNet50
+from keras.applications.resnet import preprocess_input
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import roc_curve
 import matplotlib.pyplot as plt
     
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
+LEARN_RATE = 0.0005
 
-model_weights = 'models/resnet.hdf5'
+model_weights = 'models/resnet_cropped.hdf5'
 model_name = 'ResNet50'
 
 def load_resnet_model():
-    resnet50v2_model = ResNet50V2(
+    # Load pre-trained ResNet50v2 model with the ImageNet weights, 
+    #fully connected top layer isn't included because we will do transfer learning
+    resnet50_model = ResNet50(
         include_top=False,
         weights='imagenet',
-        pooling='avg',
         input_shape=(IMG_HEIGHT, IMG_WIDTH,3)
     )
 
     # Freeze the layers in the pretrained model as we do not want to train them anymore
-    for layer in resnet50v2_model.layers:
+    for layer in resnet50_model.layers:
         layer.trainable = False
 
     # Create our transfer model that will use the pretrained resnet as input
     transfer_model = Sequential()
-    transfer_model.add(resnet50v2_model)
-    transfer_model.add(Flatten())
+    transfer_model.add(resnet50_model)
+    transfer_model.add(GlobalAveragePooling2D())
+    transfer_model.add(BatchNormalization())
     transfer_model.add(Dense(512, activation='relu'))
     transfer_model.add(BatchNormalization())
     transfer_model.add(Dense(256, activation='relu'))
     transfer_model.add(BatchNormalization())
     transfer_model.add(Dropout(0.5))
     transfer_model.add(Dense(128, activation='relu'))
-    transfer_model.add(Dropout(0.3))
+    transfer_model.add(Dropout(0.5))
     transfer_model.add(BatchNormalization())
     transfer_model.add(Dense(64, activation='relu'))
     transfer_model.add(Dropout(0.3))
@@ -51,12 +54,13 @@ def load_resnet_model():
     transfer_model.add(Dense(2,activation='softmax'))
     transfer_model.summary()
 
-    # Instantiate our desired optimzer, could be grid searched do find a more optimal configuration
-    adam = tf.keras.optimizers.Adam(lr=0.0001)
+    # Instantiate our optimzers we want to try, could be grid searched do find a more optimal configuration
+    adam = tf.keras.optimizers.Adam(learning_rate = LEARN_RATE)
+    sdg = tf.keras.optimizers.SGD(learning_rate = LEARN_RATE, momentum = 0.9, nesterov = True)
 
     # Compile model to use for training
     transfer_model.compile(
-        optimizer = tf.keras.optimizers.SGD(lr = 0.0001, momentum = 0.9, nesterov = True),
+        optimizer = sdg,
         loss = 'categorical_crossentropy',
         metrics=["accuracy"]
     )
@@ -86,9 +90,9 @@ def make_predictions(resnet_model, test_ds):
 
     model_accuracy = np.mean(predictions_binary == true_labels_int)
 
-    auc = roc_auc_score(true_labels_int, predictions_binary)
+    auc = roc_auc_score(true_labels_int, predictions[:, 1])
     
-    fpr, tpr, _ = roc_curve(true_labels_int, predictions_binary)
+    fpr, tpr, _ = roc_curve(true_labels_int, predictions[:, 1])
 
     plt.plot(fpr, tpr, label=f'AUC: {auc:.2f}')
     plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random')
@@ -155,7 +159,7 @@ if __name__ == '__main__':
     resnet_model = load_resnet_model()
     resnet_model = tf.keras.models.load_model(model_weights, compile=False)
     resnet_model.compile(
-        optimizer = tf.keras.optimizers.SGD(lr = 0.0001, momentum = 0.9, nesterov = True),
+        optimizer = tf.keras.optimizers.SGD(learning_rate = LEARN_RATE, momentum = 0.9, nesterov = True),
         loss = 'categorical_crossentropy',
         metrics=["accuracy"]
     )
