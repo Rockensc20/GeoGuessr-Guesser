@@ -163,3 +163,4 @@ cython_debug/
 /geoguessr
 /compressed_dataset
 /scaled_images
+/scaled_images_splitted
